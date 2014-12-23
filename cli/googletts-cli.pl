@@ -18,7 +18,7 @@ use File::Temp qw(tempfile);
 use URI::Escape;
 use LWP::UserAgent;
 use LWP::ConnCache;
-use Digest::MD5 qw(md5 md5_hes md5_base64);
+use Digest::MD5 qw(md5 md5_hex md5_base64);
 use File::Copy qw(copy);
 use File::Touch;
 
@@ -145,7 +145,7 @@ if (system(@soxargs)) {
 }
 
 # add the new file to the filehash
-copy "$tmpdir/$wav_name", "$filehashdir/$md5hash.wav";
+copy "$wav_name", "$filehashdir/$md5hash.wav";
 
 exit 0;
 
@@ -295,12 +295,12 @@ sub file_hash {
 	# ensure target directory exists
 	unless ( -d $filehashdir ) {
 		# directory doesn't exist, make it and then exit the sub (as no hash could exist yet)
-		mkdir($filehashdir, 0775));
+		mkdir($filehashdir, 0775);
 		return(0); # return with 0, since we don't have a hashed file
 	}
 	
 	# create md5 hash of input text
-	$md5hash = md5($input);
+	$md5hash = md5_hex($input);
 	
 	unless (-e "$filehashdir/$md5hash.wav") {
 		return(0); # file doesn't exist, so return 0
@@ -313,7 +313,7 @@ sub file_hash {
 	# 3. set the hashfile date to today (so later we can purge old hashfiles using a cutoff)
 	# 4. return
 	
-	unlink "/tmp/googletts.wav";
+	unlink "$tmpdir/googletts.wav";
 	copy "$filehashdir/$md5hash.wav", "$tmpdir/googletts.wav";
 	touch("$filehashdir/$md5hash.wav");
 	return(1);
