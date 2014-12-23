@@ -18,6 +18,9 @@ use File::Temp qw(tempfile);
 use URI::Escape;
 use LWP::UserAgent;
 use LWP::ConnCache;
+use Digest::MD5 qw(md5 md5_hes md5_base64);
+use File::Copy qw(copy);
+use File::Touch;
 
 my %options;
 my @text;
@@ -35,6 +38,8 @@ my $timeout = 10;
 my $host    = "translate.google.com/translate_tts";
 my $mpg123  = `/usr/bin/which mpg123`;
 my $sox     = `/usr/bin/which sox`;
+my $filehashdir = "/var/lib/asterisk/ttsfilehash"; # Directory to store hashed tts files
+my $md5hash = "";
 
 VERSION_MESSAGE() if (!@ARGV);
 
@@ -52,6 +57,21 @@ chomp($mpg123, $sox);
 
 parse_options();
 $input = decode('utf8', $input);
+if (file_hash()) {
+	@soxargs = ($sox, "-q", "$tmpdir/googletts.wav");
+	defined $options{o} ? push(@soxargs, ($options{o})) : push(@soxargs, ("-t", "alsa", "-d"));
+	push(@soxargs, ("tempo", "-s", $speed)) if ($speed != 1);
+	push(@soxargs, ("rate", $samplerate)) if ($samplerate);
+
+	if (system(@soxargs)) {
+		say_msg("sox failed to process sound file.");
+		exit 1;
+	}
+	
+	exit 0;
+	
+} # finish up with sox & exit after the filehash function, if the hash has been found
+
 for ($input) {
 	# Split input to comply with google tts requirements #
 	s/[\\|*~<>^\n\(\)\[\]\{\}[:cntrl:]]/ /g;
@@ -112,6 +132,7 @@ if (system($mpg123, "-q", "-w", $wav_name, @mp3list)) {
 	exit 1;
 }
 
+
 # Set sox args and process wav file #
 @soxargs = ($sox, "-q", $wav_name);
 defined $options{o} ? push(@soxargs, ($options{o})) : push(@soxargs, ("-t", "alsa", "-d"));
@@ -122,6 +143,9 @@ if (system(@soxargs)) {
 	say_msg("sox failed to process sound file.");
 	exit 1;
 }
+
+# add the new file to the filehash
+copy "$tmpdir/$wav_name", "$filehashdir/$md5hash.wav";
 
 exit 0;
 
@@ -265,4 +289,32 @@ sub lang_list {
 	} elsif ($opt eq "list") {
 		return %sup_lang;
 	}
+}
+
+sub file_hash {
+	# ensure target directory exists
+	unless ( -d $filehashdir ) {
+		# directory doesn't exist, make it and then exit the sub (as no hash could exist yet)
+		mkdir($filehashdir, 0775));
+		return(0); # return with 0, since we don't have a hashed file
+	}
+	
+	# create md5 hash of input text
+	$md5hash = md5($input);
+	
+	unless (-e "$filehashdir/$md5hash.wav") {
+		return(0); # file doesn't exist, so return 0
+	}
+	
+	# ok, the file exists, so now we need to do a few things
+	# 0. delete googletts.wav from tmp directory, to allow replacement
+	# 1. copy it to the tmp directory 
+	# 2. rename the copy to googletts.wav
+	# 3. set the hashfile date to today (so later we can purge old hashfiles using a cutoff)
+	# 4. return
+	
+	unlink "/tmp/googletts.wav";
+	copy "$filehashdir/$md5hash.wav", "$tmpdir/googletts.wav";
+	touch("$filehashdir/$md5hash.wav");
+	return(1);
 }
