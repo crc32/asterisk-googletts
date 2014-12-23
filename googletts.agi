@@ -63,17 +63,20 @@ my $cachedir = "/tmp";
 
 # Output audio sample rate      #
 # Leave blank to auto-detect    #
-my $samplerate = "";
+my $samplerate = "44100";
 
 # SoX Version                   #
 # Leave blank to auto-detect    #
-my $sox_ver = "";
+my $sox_ver = "14";
 
 # Use SSL for encryption        #
 my $use_ssl = 0;
 
 # Verbose debugging messages    #
 my $debug = 0;
+
+# Path Addition
+$ENV{'PATH'} = $ENV{'PATH'}.':/usr/local/bin';
 
 # ----------------------------- #
 
